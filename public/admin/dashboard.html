@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin Dashboard - SOS Alerts</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <style>
+        #map {
+            height: 500px;
+            width: 100%;
+        }
+        .alert-list {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>SOS Alerts Dashboard</h1>
+    <div id="map"></div>
+    <div class="alert-list" id="alertsList"></div>
+
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script>
+        // Initialize map
+        const map = L.map('map').setView([20.5937, 78.9629], 5); // India center
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        // Fetch and display alerts
+        async function fetchAlerts() {
+            try {
+                const response = await fetch('/api/sos/alerts', {
+                    headers: {
+                        'Authorization': 'Bearer ' + localStorage.getItem('adminToken')
+                    }
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    // Clear existing markers
+                    map.eachLayer((layer) => {
+                        if (layer instanceof L.Marker) {
+                            map.removeLayer(layer);
+                        }
+                    });
+
+                    // Add markers for each alert
+                    data.alerts.forEach(alert => {
+                        const marker = L.marker([alert.latitude, alert.longitude])
+                            .addTo(map)
+                            .bindPopup(`
+                                <b>User:</b> ${alert.name}<br>
+                                <b>Phone:</b> ${alert.phone}<br>
+                                <b>Type:</b> ${alert.emergency_type}<br>
+                                <b>Time:</b> ${new Date(alert.created_at).toLocaleString()}
+                            `);
+                    });
+
+                    // Update alerts list
+                    updateAlertsList(data.alerts);
+                }
+            } catch (error) {
+                console.error('Error fetching alerts:', error);
+            }
+        }
+
+        function updateAlertsList(alerts) {
+            const alertsList = document.getElementById('alertsList');
+            alertsList.innerHTML = alerts.map(alert => `
+                <div class="alert-item">
+                    <h3>Emergency: ${alert.emergency_type}</h3>
+                    <p>User: ${alert.name}</p>
+                    <p>Contact: ${alert.phone}</p>
+                    <p>Time: ${new Date(alert.created_at).toLocaleString()}</p>
+                    <hr>
+                </div>
+            `).join('');
+        }
+
+        // Fetch alerts every 30 seconds
+        fetchAlerts();
+        setInterval(fetchAlerts, 30000);
+    </script>
+</body>
+</html>
