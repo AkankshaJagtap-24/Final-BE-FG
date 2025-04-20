@@ -12,3 +12,11 @@ CREATE TABLE admins (
 -- Insert default admin
 INSERT INTO admins (name, email, password, phone) 
 VALUES ('Admin', 'admin@example.com', 'admin123', '+1234567890');
+
+
+ALTER TABLE `forum_posts` 
+ADD COLUMN `likes` VARCHAR(45) NULL AFTER `updated_at`;
+
+ALTER TABLE `forum_posts` 
+ADD COLUMN `color` VARCHAR(45) NULL AFTER `likes`,
+CHANGE COLUMN `likes` `likes` VARCHAR(45) NULL DEFAULT NULL AFTER `status`;

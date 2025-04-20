@@ -140,4 +140,41 @@ router.post('/add_forum_post', authenticateToken, async (req, res) => {
     }
 });
 
+//create a new appi to featch the comments for a post
+router.get('/forum/:postId/comments', async (req, res) => {
+    try {
+        const postId = req.params.postId;
+        const [comments] = await db.execute(`
+            SELECT
+            CONCAT('comment-', fc.id) as id,
+            fc.content,
+            fc.created_at, 
+            u.name as author_name,
+            u.email as author_email	 
+        FROM forum_comments fc
+        JOIN users u ON fc.user_id = u.id
+        WHERE fc.post_id = ?
+        ORDER BY fc.created_at DESC
+        `, [postId]);
+        // Format the comments
+        const formattedComments = comments.map(comment => {
+            const names = comment.author_name.split(' ');
+            const initials = names.map(name => name[0]).join('').toUpperCase(); 
+        })
+        res.status(200).json({
+            success: true,
+            comments: formattedComments
+
+        })
+
+    } 
+    catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        }) 
+    }
+})
+
+
 module.exports = router;
