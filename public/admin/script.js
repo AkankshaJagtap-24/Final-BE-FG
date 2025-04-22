@@ -281,6 +281,7 @@ async function loadSOSAlerts() {
                             <th>Description</th>
                             <th>Status</th>
                             <th>Created At</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -293,9 +294,24 @@ async function loadSOSAlerts() {
                                     <td>${alert.description || '-'}</td>
                                     <td>${alert.status || '-'}</td>
                                     <td>${alert.created_at ? new Date(alert.created_at).toLocaleString() : '-'}</td>
+                                   
+                                    <td>
+                                        <button class="btn btn-info btn-sm" onclick='viewSOSDetails(${JSON.stringify(alert)})'>
+                                            <i class="fas fa-eye me-1"></i>View
+                                        </button>
+                                    </td>
+                                    
+                                   
+                                    <td>
+                                        <button class="btn btn-sm btn-${alert.status === 'active' ? 'danger' : 'success'}" 
+                                                onclick="updateAlertStatus(${alert.id}, '${alert.status === 'active' ? 'inactive' : 'active'}')">
+                                            <i class="fas fa-${alert.status === 'active' ? 'times' : 'check'} me-1"></i>
+                                            ${alert.status === 'active' ? 'Deactivate' : 'Activate'}
+                                        </button>
+                                    </td>
                                 </tr>
                             `).join('') : 
-                            '<tr><td colspan="6" class="text-center">No SOS alerts found</td></tr>'
+                            '<tr><td colspan="7" class="text-center">No SOS alerts found</td></tr>'
                         }
                     </tbody>
                 </table>
@@ -310,6 +326,61 @@ async function loadSOSAlerts() {
             </div>
         `;
     }
+}
+
+// Add this new function to handle viewing SOS details
+let map = null;
+function viewSOSDetails(alert) {
+    // Populate user details
+    document.getElementById('userDetails').innerHTML = `
+        <table class="table">
+            <tr><th>Name:</th><td>${alert.user_name || '-'}</td></tr>
+            <tr><th>Phone:</th><td>${alert.user_phone || '-'}</td></tr>
+            <tr><th>Email:</th><td>${alert.user_email || '-'}</td></tr>
+            <tr><th>Address:</th><td>${alert.user_address || '-'}</td></tr>
+        </table>
+    `;
+
+    // Populate alert details
+    document.getElementById('alertDetails').innerHTML = `
+        <table class="table">
+            <tr><th>ID:</th><td>${alert.id || '-'}</td></tr>
+            <tr><th>Status:</th><td>${alert.status || '-'}</td></tr>
+            <tr><th>Created:</th><td>${alert.created_at ? new Date(alert.created_at).toLocaleString() : '-'}</td></tr>
+            <tr><th>Description:</th><td>${alert.description || '-'}</td></tr>
+        </table>
+    `;
+
+    // Initialize map
+    if (map) {
+        map.remove();
+    }
+
+    map = L.map('map');
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    if (alert.latitude && alert.longitude) {
+        const lat = parseFloat(alert.latitude);
+        const lng = parseFloat(alert.longitude);
+        map.setView([lat, lng], 13);
+        L.marker([lat, lng]).addTo(map)
+            .bindPopup('SOS Alert Location')
+            .openPopup();
+    } else {
+        map.setView([0, 0], 2);
+        document.getElementById('map').innerHTML = '<div class="alert alert-warning">Location coordinates not available</div>';
+    }
+
+    // Show the modal
+    const modal = new bootstrap.Modal(document.getElementById('sosDetailsModal'));
+    modal.show();
+
+    // Update map size when modal is shown
+    modal._element.addEventListener('shown.bs.modal', function () {
+        map.invalidateSize();
+    });
 }
 
 async function loadForumPosts() {
@@ -330,7 +401,9 @@ async function loadForumPosts() {
                             <th>Title</th>
                             <th>Author</th>
                             <th>Content</th>
+                            <th>Status</th>
                             <th>Created At</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -339,8 +412,18 @@ async function loadForumPosts() {
                                 <td>${post.id}</td>
                                 <td>${post.title}</td>
                                 <td>${post.author_name}</td>
-                                <td>${post.content}</td>
+                                <td>${post.content.substring(0, 100)}${post.content.length > 100 ? '...' : ''}</td>
+                                <td>
+                                    <span class="badge bg-${post.status="active"? 'success' : 'danger'}">
+                                        ${post.status="active" ? 'Visible' : 'Hidden'}
+                                    </span>
+                                </td>
                                 <td>${new Date(post.created_at).toLocaleString()}</td>
+                                <td>
+                                    <button class="btn btn-info btn-sm me-1" onclick='viewForumPost(${JSON.stringify(post)})'>
+                                        <i class="fas fa-eye me-1"></i>View
+                                    </button>
+                                </td>
                             </tr>
                         `).join('')}
                     </tbody>
@@ -350,6 +433,74 @@ async function loadForumPosts() {
         document.getElementById('forumContent').innerHTML = html;
     } catch (error) {
         console.error('Error loading forum posts:', error);
+    }
+}
+
+// Add these new functions
+async function viewForumPost(post) {
+    try {
+        // Fetch post details including comments and likes
+        const response = await fetch(`${API_URL}/admin/forum-posts/${post.id}/details`, {
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            }
+        });
+        const details = await response.json();
+
+        // Update modal content
+        document.getElementById('postTitle').textContent = post.title;
+        document.getElementById('postAuthor').textContent = `Posted by ${post.author_name}`;
+        document.getElementById('postDate').textContent = new Date(post.created_at).toLocaleString();
+        document.getElementById('postContent').textContent = post.content;
+        document.getElementById('likeCount').textContent = details.likes_count;
+        document.getElementById('commentCount').textContent = details.comments.length;
+
+        // Update comments list
+        const commentsHtml = details.comments.map(comment => `
+            <div class="comment-item border-bottom py-2">
+                <div class="d-flex justify-content-between">
+                    <strong>${comment.user_name}</strong>
+                    <small class="text-muted">${new Date(comment.created_at).toLocaleString()}</small>
+                </div>
+                <p class="mb-0 mt-1">${comment.content}</p>
+            </div>
+        `).join('');
+        document.getElementById('commentsList').innerHTML = commentsHtml || '<p class="text-muted">No comments yet</p>';
+
+        // Update visibility toggle button
+        const toggleBtn = document.getElementById('togglePostVisibility');
+        toggleBtn.textContent = post.is_visible ? 'Hide Post' : 'Show Post';
+        toggleBtn.className = `btn ${post.is_visible ? 'btn-warning' : 'btn-success'}`;
+        toggleBtn.onclick = () => togglePostVisibility(post.id, !post.is_visible);
+
+        // Show modal
+        const modal = new bootstrap.Modal(document.getElementById('forumDetailsModal'));
+        modal.show();
+    } catch (error) {
+        console.error('Error loading post details:', error);
+        alert('Failed to load post details: ' + error.message);
+    }
+}
+
+async function togglePostVisibility(postId, makeVisible) {
+    try {
+        const response = await fetch(`${API_URL}/admin/forum-posts/${postId}/visibility`, {
+            method: 'PUT',
+            headers: {
+                'Authorization': `Bearer ${authToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ is_visible: makeVisible })
+        });
+
+        if (!response.ok) throw new Error('Failed to update post visibility');
+
+        // Close modal and reload posts
+        bootstrap.Modal.getInstance(document.getElementById('forumDetailsModal')).hide();
+        await loadForumPosts();
+    } catch (error) {
+        console.error('Error updating post visibility:', error);
+        alert('Failed to update post visibility: ' + error.message);
     }
 }
 

@@ -132,4 +132,84 @@ router.get('/admin/dashboard-alerts', async (req, res) => {
         });
     }
 });
+
+// Get forum post details with comments and likes
+router.get('/admin/forum-posts/:id/details', async (req, res) => {
+    try {
+        // Get post details with author
+        const [posts] = await db.execute(`
+            SELECT 
+                f.*,
+                u.name as author_name,
+                u.email as author_email
+            FROM forum_posts f
+            LEFT JOIN users u ON f.user_id = u.id
+            WHERE f.id = ?
+        `, [req.params.id]);
+
+        if (posts.length === 0) {
+            return res.status(404).json({ success: false, message: 'Post not found' });
+        }
+
+        // Get comments for the post
+        const [comments] = await db.execute(`
+            SELECT 
+                c.*,
+                u.name as user_name
+            FROM forum_comments c
+            LEFT JOIN users u ON c.user_id = u.id
+            WHERE c.post_id = ?
+            ORDER BY c.created_at DESC
+        `, [req.params.id]);
+ 
+
+        res.status(200).json({
+            success: true,
+            post: posts[0],
+            comments: comments,
+            likes_count: posts[0].likes
+        });
+    } catch (error) {
+        console.error('Error fetching post details:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Update forum post visibility
+router.put('/admin/forum-posts/:id/visibility', async (req, res) => {
+    try {
+        const { is_visible } = req.body;
+        
+        // Update post visibility
+        await db.execute(`
+            UPDATE forum_posts
+            SET is_visible = ?, updated_at = NOW()
+            WHERE id = ?
+        `, [is_visible, req.params.id]);
+
+        // Get updated post details
+        const [posts] = await db.execute(`
+            SELECT 
+                f.*,
+                u.name as author_name
+            FROM forum_posts f
+            LEFT JOIN users u ON f.user_id = u.id
+            WHERE f.id = ?
+        `, [req.params.id]);
+
+        if (posts.length === 0) {
+            return res.status(404).json({ success: false, message: 'Post not found' });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: `Post ${is_visible ? 'shown' : 'hidden'} successfully`,
+            post: posts[0]
+        });
+    } catch (error) {
+        console.error('Error updating post visibility:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 module.exports = router;

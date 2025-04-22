@@ -4,14 +4,14 @@ const db = require('../config/db');
 const { authenticateToken } = require('../middleware/auth');
 
 // Create SOS alert
-router.post('/trigger', authenticateToken, async (req, res) => {
+router.post('/sos_hit', authenticateToken, async (req, res) => {
     try {
-        const { latitude, longitude, emergency_type } = req.body;
+        const { latitude, longitude, description,location } = req.body;
         const userId = req.user.userId;
 
         const [result] = await db.execute(
-            'INSERT INTO sos_alerts (user_id, latitude, longitude, emergency_type) VALUES (?, ?, ?, ?)',
-            [userId, latitude, longitude, emergency_type]
+            'INSERT INTO sos_alerts (user_id, latitude, longitude, description,location) VALUES (?, ?, ?, ?,?)',
+            [userId, latitude, longitude, description,location]
         );
 
         res.status(201).json({
